@@ -12,19 +12,19 @@ Run:    python app.py   then open http://<pi-ip>:5000
 # =====================================================================
 
 # --- DHT temperature & humidity sensor ---
-DHT_PIN = 4                  # BCM GPIO connected to the DHT data line
+DHT_PIN = 24                 # BCM GPIO connected to the DHT data line
 DHT_TYPE = "DHT11"           # "DHT11" or "DHT22"
 
 # --- Soil moisture sensor ---
 # "ads1115" : analog sensor (capacitive v1.2 etc.) through an ADS1115 ADC on I2C
 #             (SDA = GPIO2, SCL = GPIO3) -> gives a moisture percentage
 # "digital" : sensor module DO pin wired straight to a GPIO -> gives wet/dry only
-SOIL_MODE = "ads1115"
+SOIL_MODE = "digital"
 SOIL_ADC_CHANNEL = 0         # ADS1115 input channel (0..3 = A0..A3)
 ADS1115_ADDRESS = 0x48       # I2C address of the ADS1115
 SOIL_DRY_VOLTAGE = 2.80      # sensor voltage in dry air   (calibrate)
 SOIL_WET_VOLTAGE = 1.20      # sensor voltage in water     (calibrate)
-SOIL_DIGITAL_PIN = 17        # BCM GPIO for the DO pin (only used in "digital" mode)
+SOIL_DIGITAL_PIN = 23        # BCM GPIO for the DO pin (only used in "digital" mode)
 SOIL_DIGITAL_WET_LEVEL = 0   # logic level the DO pin outputs when the soil is wet
 
 # --- Camera ---
