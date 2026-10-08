@@ -1,0 +1,10 @@
+Flask>=3.0
+opencv-python-headless>=4.10
+adafruit-blinka>=8.50
+adafruit-circuitpython-dht>=4.0
+adafruit-circuitpython-ads1x15>=2.4,<3
+gpiozero>=2.0
+lgpio>=0.2.2.0
+# Pi Camera (CSI) support uses Picamera2, which is installed with apt, not pip:
+#   sudo apt install python3-picamera2
+# and create the venv with:  python3 -m venv --system-site-packages venv

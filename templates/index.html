@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SIFS Monitor</title>
+  <style>
+    :root { --bg:#f3f6f2; --card:#fff; --text:#1d2b1f; --muted:#6b7a6d; --accent:#2e7d32; --warn:#c62828; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:system-ui, sans-serif; background:var(--bg); color:var(--text); }
+    header { background:var(--accent); color:#fff; padding:14px 20px; }
+    header h1 { margin:0; font-size:1.3rem; }
+    header p { margin:2px 0 0; font-size:.85rem; opacity:.85; }
+    main { max-width:1100px; margin:20px auto; padding:0 16px; display:grid; gap:16px;
+           grid-template-columns: 2fr 1fr; }
+    @media (max-width: 800px) { main { grid-template-columns:1fr; } }
+    .card { background:var(--card); border-radius:10px; padding:16px; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+    .card h2 { margin:0 0 10px; font-size:1rem; color:var(--muted); font-weight:600; }
+    #stream { width:100%; border-radius:6px; background:#000; min-height:200px; display:block; }
+    .readings { display:grid; gap:12px; }
+    .value { font-size:2.2rem; font-weight:700; }
+    .unit { font-size:1rem; color:var(--muted); margin-left:4px; }
+    .sub { font-size:.8rem; color:var(--muted); margin-top:4px; }
+    .err { color:var(--warn); font-size:.8rem; margin-top:4px; }
+    .bar { height:8px; background:#e3e9e3; border-radius:4px; margin-top:8px; overflow:hidden; }
+    .bar > div { height:100%; width:0; background:var(--accent); transition:width .5s; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>SIFS – Smart Indoor Farming System</h1>
+  <p>Last update: <span id="updated">–</span></p>
+</header>
+<main>
+  <section class="card">
+    <h2>Live camera</h2>
+    <img id="stream" src="{{ url_for('video_feed') }}" alt="Camera stream">
+    <div class="sub">Source: <span id="camera">–</span></div>
+  </section>
+
+  <section class="readings">
+    <div class="card">
+      <h2>Temperature</h2>
+      <span class="value" id="temperature">–</span><span class="unit">°C</span>
+    </div>
+    <div class="card">
+      <h2>Humidity</h2>
+      <span class="value" id="humidity">–</span><span class="unit">%</span>
+      <div class="err" id="dht_error"></div>
+    </div>
+    <div class="card">
+      <h2>Soil moisture</h2>
+      <span class="value" id="soil">–</span><span class="unit" id="soil_unit"></span>
+      <div class="bar" id="soil_bar_wrap"><div id="soil_bar"></div></div>
+      <div class="sub" id="soil_sub"></div>
+      <div class="err" id="soil_error"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const show = v => (v === null || v === undefined) ? "–" : v;
+
+  async function refresh() {
+    try {
+      const d = await (await fetch("/api/data")).json();
+      $("temperature").textContent = show(d.temperature);
+      $("humidity").textContent = show(d.humidity);
+      $("dht_error").textContent = d.dht_error ? "DHT: " + d.dht_error : "";
+      $("camera").textContent = d.camera;
+      $("updated").textContent = show(d.updated);
+
+      if (d.soil_mode === "digital") {
+        $("soil").textContent = d.soil_state ? d.soil_state.toUpperCase() : "–";
+        $("soil_unit").textContent = "";
+        $("soil_bar_wrap").style.display = "none";
+        $("soil_sub").textContent = "";
+      } else {
+        $("soil").textContent = show(d.soil_moisture);
+        $("soil_unit").textContent = "%";
+        $("soil_bar").style.width = (d.soil_moisture || 0) + "%";
+        $("soil_sub").textContent = d.soil_voltage !== null ? "Sensor voltage: " + d.soil_voltage + " V" : "";
+      }
+      $("soil_error").textContent = d.soil_error ? "Soil: " + d.soil_error : "";
+    } catch (e) {
+      $("updated").textContent = "connection lost";
+    }
+  }
+
+  // Reconnect the MJPEG stream if it drops (e.g. camera re-selected).
+  $("stream").onerror = () => setTimeout(() => {
+    $("stream").src = "{{ url_for('video_feed') }}?t=" + Date.now();
+  }, 2000);
+
+  refresh();
+  setInterval(refresh, {{ interval_ms }});
+</script>
+</body>
+</html>
