@@ -36,7 +36,7 @@ python3 -m venv --system-site-packages venv
 
 Enable the Pi UART in `raspi-config`, disable the serial login shell, and connect the MH-Z19B to 5 V, GND, Pi TX (GPIO14) → sensor RX, and Pi RX (GPIO15) ← sensor TX. The sensor uses 3.3 V UART logic at 9600 baud and needs about three minutes to warm up. Confirm the module's pin labels against its board before powering it. The pump and LED must have suitable external power and relay ratings; do not power them from a Pi GPIO. Check whether your relay is active low or active high before connecting the load.
 
-The defaults in `pi_agent.py` are DHT data GPIO24, digital soil GPIO23 (low = wet), pump relay GPIO17, and LED relay GPIO27 (active low). Edit the sensor settings in that file if the wiring differs. For an ADS1115 analog soil sensor, set `SOIL_MODE = "ads1115"` and calibrate the dry/wet voltages. Start with the pump disconnected while confirming relay states.
+The defaults in `pi_agent.py` are DHT data GPIO24, digital soil GPIO23 (low = wet), pump relay GPIO17, and LED relay GPIO27 (active low). Set `SIFS_DHT_PIN`, `SIFS_SOIL_DIGITAL_PIN`, `SIFS_SOIL_DIGITAL_WET_LEVEL`, `SIFS_PUMP_PIN`, `SIFS_LIGHT_PIN`, and `SIFS_RELAY_ACTIVE_HIGH` in the service environment if the wiring differs. For an ADS1115 analog soil sensor, set `SIFS_SOIL_MODE=ads1115` and calibrate `SIFS_SOIL_DRY_VOLTAGE` and `SIFS_SOIL_WET_VOLTAGE`. A USB camera can be selected with `SIFS_CAMERA_INDEX`; leaving it unset scans available video devices. Start with the pump disconnected while confirming relay states.
 
 ```bash
 export GOOGLE_APPLICATION_CREDENTIALS=/etc/sifs/service-account.json

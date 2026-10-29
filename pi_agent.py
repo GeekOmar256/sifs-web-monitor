@@ -20,16 +20,16 @@ from control_logic import light_should_run, parse_co2_packet, pump_should_run
 from local_server import LocalState, create_app
 
 # Match these to the actual wiring and calibration before enabling the service.
-DHT_PIN = 24
-DHT_TYPE = "DHT11"
-SOIL_MODE = "digital"  # or "ads1115"
-SOIL_DIGITAL_PIN = 23
-SOIL_DIGITAL_WET_LEVEL = 0
-SOIL_ADC_CHANNEL = 0
-SOIL_DRY_VOLTAGE = 2.80
-SOIL_WET_VOLTAGE = 1.20
-ADS1115_ADDRESS = 0x48
-CAMERA_INDEX = None
+DHT_PIN = int(os.getenv("SIFS_DHT_PIN", "24"))
+DHT_TYPE = os.getenv("SIFS_DHT_TYPE", "DHT11")
+SOIL_MODE = os.getenv("SIFS_SOIL_MODE", "digital")  # or "ads1115"
+SOIL_DIGITAL_PIN = int(os.getenv("SIFS_SOIL_DIGITAL_PIN", "23"))
+SOIL_DIGITAL_WET_LEVEL = int(os.getenv("SIFS_SOIL_DIGITAL_WET_LEVEL", "0"))
+SOIL_ADC_CHANNEL = int(os.getenv("SIFS_SOIL_ADC_CHANNEL", "0"))
+SOIL_DRY_VOLTAGE = float(os.getenv("SIFS_SOIL_DRY_VOLTAGE", "2.80"))
+SOIL_WET_VOLTAGE = float(os.getenv("SIFS_SOIL_WET_VOLTAGE", "1.20"))
+ADS1115_ADDRESS = int(os.getenv("SIFS_ADS1115_ADDRESS", "0x48"), 0)
+CAMERA_INDEX = int(os.environ["SIFS_CAMERA_INDEX"]) if os.getenv("SIFS_CAMERA_INDEX") else None
 CAMERA_MAX_INDEX = 10
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
