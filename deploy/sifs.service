@@ -1,0 +1,19 @@
+[Unit]
+Description=SIFS Smart Farm Raspberry Pi controller and LAN dashboard
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=farm
+Group=farm
+WorkingDirectory=/home/farm/sifs-web-monitor
+EnvironmentFile=/etc/sifs/sifs.env
+ExecStart=/home/farm/sifs-web-monitor/venv/bin/python /home/farm/sifs-web-monitor/pi_agent.py
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=10
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

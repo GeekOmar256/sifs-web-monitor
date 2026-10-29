@@ -1,0 +1,13 @@
+{
+  "projects": {},
+  "targets": {
+    "crop-moniotring-ggvmx4": {
+      "hosting": {
+        "sifs": [
+          "sifs-smart-farm"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

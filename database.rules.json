@@ -1,0 +1,29 @@
+{
+  "rules": {
+    "farms": {
+      "sifs": {
+        ".read": "auth != null && auth.token.email === 'smartfarm@gmail.com' && auth.token.email_verified === true",
+        "settings": {
+          ".write": "auth != null && auth.token.email === 'smartfarm@gmail.com' && auth.token.email_verified === true"
+        },
+        "commands": {
+          "captureRequest": {
+            ".write": "auth != null && auth.token.email === 'smartfarm@gmail.com' && auth.token.email_verified === true"
+          }
+        },
+        "history": {
+          "settings": {
+            "$entry": {
+              ".write": "auth != null && auth.token.email === 'smartfarm@gmail.com' && auth.token.email_verified === true && !data.exists()"
+            }
+          },
+          "analyses": {
+            "$entry": {
+              ".write": "auth != null && auth.token.email === 'smartfarm@gmail.com' && auth.token.email_verified === true && !data.exists()"
+            }
+          }
+        }
+      }
+    }
+  }
+}

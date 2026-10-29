@@ -1,0 +1,9 @@
+{
+  "hosting": {
+    "target": "sifs",
+    "public": "web",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "headers": [{"source": "**", "headers": [{"key": "Cache-Control", "value": "no-cache"}]}]
+  },
+  "database": {"rules": "database.rules.json"}
+}
