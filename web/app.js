@@ -298,15 +298,17 @@ $('login-form').addEventListener('submit', async event => {
 });
 $('create-account').addEventListener('click', async () => {
   $('login-error').textContent = '';
-  if (!['smartfarm@gmail.com', 'smartfarm2026@gmail.com'].includes($('login-email').value.trim().toLowerCase())) {
-    $('login-error').textContent = 'Use an authorized Smart Farm email address.'; return;
-  }
   try {
     const result = await firebaseFns.createUserWithEmailAndPassword(auth, $('login-email').value, $('login-password').value);
     await firebaseFns.sendEmailVerification(result.user);
     await firebaseFns.signOut(auth);
     $('login-error').textContent = 'Account created. Open your email verification link, then sign in.';
   } catch (error) { $('login-error').textContent = error.message || 'Could not create account'; }
+});
+$('guest-button').addEventListener('click', async () => {
+  $('login-error').textContent = '';
+  try { await firebaseFns.signInAnonymously(auth); }
+  catch (error) { $('login-error').textContent = error.message || 'Guest sign-in failed'; }
 });
 $('reset-password').addEventListener('click', async () => {
   try {
@@ -349,6 +351,8 @@ async function connectLocal() {
   $('login-password').closest('label').firstChild.textContent = 'Local PIN';
   $('login-password').placeholder = 'Local access PIN';
   $('login-modal').querySelector('.auth-links').classList.add('hidden');
+  $('guest-button').classList.add('hidden');
+  $('guest-note').classList.add('hidden');
   $('login-form').querySelector('button[type="submit"]').textContent = 'Connect';
   if (sessionStorage.getItem('sifs-local-pin')) {
     try { await pollLocal(); } catch (_) { sessionStorage.removeItem('sifs-local-pin'); }
@@ -380,9 +384,11 @@ async function connectFirebase() {
   authModule.onIdTokenChanged(auth, nextUser => {
     if (refs) { refs.forEach(unsubscribe => unsubscribe()); refs = null; }
     user = nextUser;
-    $('login-modal').classList.toggle('hidden', Boolean(user?.emailVerified));
-    if (!user?.emailVerified) { setConnection(user ? 'Verify email' : 'Sign in required', 'offline'); return; }
-    $('account-detail').textContent = user.email || user.uid;
+    const signedIn = Boolean(user?.isAnonymous || user?.emailVerified);
+    $('login-modal').classList.toggle('hidden', signedIn);
+    if (!signedIn) { setConnection(user ? 'Verify email' : 'Sign in required', 'offline'); return; }
+    $('account-detail').textContent = user.isAnonymous ? 'Anonymous session' : user.email;
+    displaySettings();
     const base = `farms/${farmId}`;
     refs = [
       dbModule.onValue(dbModule.ref(database, `${base}/telemetry`), snap => { data.telemetry = snap.val() || {}; displayTelemetry(); }, () => setConnection('Access denied', 'offline')),

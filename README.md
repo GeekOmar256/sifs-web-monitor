@@ -15,10 +15,10 @@ Mobile-first Firebase web dashboard and Raspberry Pi controller for an indoor fa
 
 ## Firebase deployment
 
-The SIFS site is `https://sifs-smart-farm.web.app` in project `crop-moniotring-ggvmx4`. The app has its own Web App registration and Hosting target `sifs`; it does not deploy to the project's default Hosting site. Firebase Spark allowed only one Realtime Database instance, so SIFS uses the new default database under `farms/sifs`. The rules allow dashboard access only to `smartfarm@gmail.com` and allow browser writes only to settings and snapshot requests. The Pi uses the Admin SDK to write sensor data and photos.
+The SIFS site is `https://sifs-smart-farm.web.app` in project `crop-moniotring-ggvmx4`. The app has its own Web App registration and Hosting target `sifs`; it does not deploy to the project's default Hosting site. Firebase Spark allowed only one Realtime Database instance, so SIFS uses the new default database under `farms/sifs`. Anyone can create an email account or continue anonymously. Both verified email users and anonymous visitors can view the dashboard and change settings, request photos, and save analyses. The Pi uses the Admin SDK to write sensor data and photos.
 
-1. The project's **Email/Password** sign-in provider is enabled. At the SIFS site, select **Create account** with `Smartfarm@gmail.com` and a strong password, then verify the email from the link Firebase sends. If the account already exists, sign in or use **Forgot password**. The database rules require this verified email address. Do not put the password in this repository.
-2. From this folder, deploy with `firebase deploy --only hosting:sifs,database --project crop-moniotring-ggvmx4`. Use this exact Hosting target to avoid deploying to another site.
+1. The project's **Email/Password** and **Anonymous** sign-in providers are enabled. At the SIFS site, select **Create account** with any email address and verify the link Firebase sends, or select **Continue anonymously**. Both paths can control the connected farm. Do not put passwords in this repository.
+2. From this folder, deploy with `firebase deploy --only auth,hosting:sifs,database --project crop-moniotring-ggvmx4`. Use this exact Hosting target to avoid deploying to another site.
 3. Sign in at `https://sifs-smart-farm.web.app` to configure the threshold and camera interval. The screen will show the Pi offline until the bridge below is running.
 
 The `web/firebase-config.js` values are Firebase client identifiers, not service account secrets. Never commit a service account JSON or an OpenAI API key.

@@ -2,24 +2,24 @@
   "rules": {
     "farms": {
       "sifs": {
-        ".read": "auth != null && auth.token.email_verified === true && (auth.token.email === 'smartfarm@gmail.com' || auth.token.email === 'smartfarm2026@gmail.com')",
+        ".read": "auth != null && (auth.token.email_verified === true || auth.token.firebase.sign_in_provider === 'anonymous')",
         "settings": {
-          ".write": "auth != null && auth.token.email_verified === true && (auth.token.email === 'smartfarm@gmail.com' || auth.token.email === 'smartfarm2026@gmail.com')"
+          ".write": "auth != null && (auth.token.email_verified === true || auth.token.firebase.sign_in_provider === 'anonymous')"
         },
         "commands": {
           "captureRequest": {
-            ".write": "auth != null && auth.token.email_verified === true && (auth.token.email === 'smartfarm@gmail.com' || auth.token.email === 'smartfarm2026@gmail.com')"
+            ".write": "auth != null && (auth.token.email_verified === true || auth.token.firebase.sign_in_provider === 'anonymous')"
           }
         },
         "history": {
           "settings": {
             "$entry": {
-              ".write": "auth != null && auth.token.email_verified === true && (auth.token.email === 'smartfarm@gmail.com' || auth.token.email === 'smartfarm2026@gmail.com') && !data.exists()"
+              ".write": "auth != null && (auth.token.email_verified === true || auth.token.firebase.sign_in_provider === 'anonymous') && !data.exists()"
             }
           },
           "analyses": {
             "$entry": {
-              ".write": "auth != null && auth.token.email_verified === true && (auth.token.email === 'smartfarm@gmail.com' || auth.token.email === 'smartfarm2026@gmail.com') && !data.exists()"
+              ".write": "auth != null && (auth.token.email_verified === true || auth.token.firebase.sign_in_provider === 'anonymous') && !data.exists()"
             }
           }
         }
