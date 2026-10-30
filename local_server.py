@@ -6,6 +6,7 @@ import os
 import sqlite3
 import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 from flask import Flask, Response, abort, jsonify, request, send_from_directory
@@ -40,6 +41,9 @@ class LocalState:
         self.settings = json.loads(SETTINGS_FILE.read_text()) if SETTINGS_FILE.exists() else {}
         self.telemetry = {}
         self.photo = None
+        self.analysis = None
+        self.analysis_status = "waiting"
+        self.analysis_error = None
         self.capture_request = None
         self.remote_capture_request = None
         self.camera_error = None
@@ -52,7 +56,24 @@ class LocalState:
                 CREATE TABLE IF NOT EXISTS analyses (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp INTEGER NOT NULL, result TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS outbox (id INTEGER PRIMARY KEY AUTOINCREMENT, path TEXT NOT NULL, payload TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS synced_analyses (cloud_key TEXT PRIMARY KEY);
+                CREATE TABLE IF NOT EXISTS analysis_jobs (photo_id INTEGER PRIMARY KEY, captured_at TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, next_attempt_at INTEGER NOT NULL DEFAULT 0);
             """)
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(photos)")}
+            if "captured_at" not in columns:
+                conn.execute("ALTER TABLE photos ADD COLUMN captured_at TEXT")
+            latest_photo = conn.execute("SELECT timestamp,image,captured_at FROM photos ORDER BY id DESC LIMIT 1").fetchone()
+            latest_analysis = conn.execute("SELECT timestamp,result FROM analyses ORDER BY id DESC LIMIT 1").fetchone()
+            pending_job = conn.execute("SELECT 1 FROM analysis_jobs LIMIT 1").fetchone()
+        if latest_photo:
+            stamp, image, captured_at = latest_photo
+            self.photo = {"image": image, "capturedAt": captured_at or datetime.fromtimestamp(stamp / 1000, timezone.utc).isoformat()}
+        if latest_analysis:
+            stamp, result = latest_analysis
+            self.analysis = {"timestamp": stamp, **json.loads(result)}
+        if pending_job:
+            self.analysis_status = "pending"
+        elif self.analysis:
+            self.analysis_status = "complete"
 
     def connect(self):
         return sqlite3.connect(DB_FILE, timeout=5)
@@ -60,8 +81,10 @@ class LocalState:
     def snapshot(self):
         with self.lock:
             return {"telemetry": self.telemetry, "settings": self.settings,
-                    "photo": self.photo, "cloudOnline": self.cloud_online,
-                    "cameraError": self.camera_error}
+                    "photo": self.photo, "analysis": self.analysis,
+                    "analysisStatus": self.analysis_status,
+                    "analysisError": self.analysis_error,
+                    "cloudOnline": self.cloud_online, "cameraError": self.camera_error}
 
     def set_setting(self, key, value, timestamp=None, queue_cloud=True):
         value = validate_setting(key, value)
@@ -110,24 +133,65 @@ class LocalState:
         return row
 
     def set_photo(self, image, captured_at):
-        with self.lock:
-            self.photo = {"image": image, "capturedAt": captured_at}
         stamp = int(time.time() * 1000)
         with self.connect() as conn:
-            conn.execute("INSERT INTO photos(timestamp,image) VALUES(?,?)", (stamp, image))
+            photo_id = conn.execute("INSERT INTO photos(timestamp,image,captured_at) VALUES(?,?,?)",
+                                    (stamp, image, captured_at)).lastrowid
+            conn.execute("INSERT INTO analysis_jobs(photo_id,captured_at) VALUES(?,?)",
+                         (photo_id, captured_at))
             conn.execute("INSERT INTO outbox(path,payload) VALUES(?,?)",
                          ("history/photos", json.dumps({"timestamp": stamp, "image": image,
                                                           "capturedAt": captured_at})))
+            conn.execute("DELETE FROM analysis_jobs WHERE photo_id NOT IN "
+                         "(SELECT id FROM photos ORDER BY id DESC LIMIT 250)")
             conn.execute("DELETE FROM photos WHERE id NOT IN (SELECT id FROM photos ORDER BY id DESC LIMIT 250)")
+        with self.lock:
+            self.photo = {"image": image, "capturedAt": captured_at}
+            self.analysis = None
+            self.analysis_status = "pending"
+            self.analysis_error = None
         return stamp
 
-    def record_analysis(self, result):
+    def next_analysis_job(self):
+        with self.connect() as conn:
+            row = conn.execute("""SELECT j.photo_id,p.image,j.captured_at FROM analysis_jobs j
+                                  JOIN photos p ON p.id=j.photo_id
+                                  WHERE j.next_attempt_at<=? ORDER BY j.photo_id LIMIT 1""",
+                               (int(time.time()),)).fetchone()
+        return row
+
+    def set_analysis_status(self, status, error):
+        with self.lock:
+            self.analysis_status = status
+            self.analysis_error = error
+
+    def complete_analysis(self, photo_id, result):
         stamp = int(time.time() * 1000)
         with self.connect() as conn:
+            if not conn.execute("SELECT 1 FROM analysis_jobs WHERE photo_id=?", (photo_id,)).fetchone():
+                return False
             conn.execute("INSERT INTO analyses(timestamp,result) VALUES(?,?)", (stamp, json.dumps(result)))
             conn.execute("INSERT INTO outbox(path,payload) VALUES(?,?)",
                          ("history/analyses", json.dumps({"timestamp": stamp, **result})))
-        return stamp
+            conn.execute("DELETE FROM analysis_jobs WHERE photo_id=?", (photo_id,))
+        with self.lock:
+            if self.photo and self.photo["capturedAt"] == result["photoCapturedAt"]:
+                self.analysis = {"timestamp": stamp, **result}
+                self.analysis_status = "complete"
+                self.analysis_error = None
+        return True
+
+    def defer_analysis(self, photo_id, error):
+        with self.connect() as conn:
+            row = conn.execute("SELECT attempts FROM analysis_jobs WHERE photo_id=?", (photo_id,)).fetchone()
+            if not row:
+                return 2
+            attempts = row[0] + 1
+            delay = min(600, 10 * 2 ** min(attempts - 1, 6))
+            conn.execute("UPDATE analysis_jobs SET attempts=?,next_attempt_at=? WHERE photo_id=?",
+                         (attempts, int(time.time()) + delay, photo_id))
+        self.set_analysis_status("retrying", error)
+        return delay
 
     def pending(self):
         with self.connect() as conn:
@@ -147,6 +211,11 @@ class LocalState:
                     conn.execute("INSERT INTO analyses(timestamp,result) VALUES(?,?)",
                                  (value.get("timestamp") or int(time.time() * 1000), json.dumps(value)))
                     conn.execute("INSERT INTO synced_analyses(cloud_key) VALUES(?)", (key,))
+                    with self.lock:
+                        if self.photo and value.get("photoCapturedAt") == self.photo["capturedAt"]:
+                            self.analysis = value
+                            self.analysis_status = "complete"
+                            self.analysis_error = None
 
     def history(self, kind, limit=100):
         if kind not in ("telemetry", "settings", "photos", "analyses"):
@@ -206,14 +275,6 @@ def create_app(state):
         with state.lock:
             state.capture_request = str(time.time_ns())
         return jsonify({"queued": True})
-
-    @app.post("/api/local/analysis")
-    def analysis():
-        payload = request.get_json(force=True, silent=True) or {}
-        if not isinstance(payload.get("result"), dict):
-            return jsonify({"error": "invalid analysis"}), 400
-        stamp = state.record_analysis(payload["result"])
-        return jsonify({"timestamp": stamp})
 
     @app.get("/api/local/history/<kind>")
     def history(kind):

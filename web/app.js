@@ -1,8 +1,10 @@
 import { firebaseConfig, farmId } from './firebase-config.js';
+sessionStorage.removeItem('sifs-openai-key');
 
 const $ = id => document.getElementById(id);
 const pages = ['overview', 'camera', 'history', 'controls', 'settings'];
-const data = { telemetry: {}, settings: {}, photo: null,
+const data = { telemetry: {}, settings: {}, photo: null, analysis: null,
+  analysisStatus: 'waiting', analysisError: null,
   local: Boolean(window.SIFS_LOCAL), demo: !window.SIFS_LOCAL && !firebaseConfig.apiKey };
 let auth, database, user, refs, firebaseFns;
 let toastTimer;
@@ -81,6 +83,7 @@ function displayPhoto() {
   $('photo-time').textContent = photo?.capturedAt ? `Captured ${timeLabel(photo.capturedAt)}` : 'No snapshot yet';
   $('camera-time').textContent = $('photo-time').textContent;
   $('camera-source').textContent = photo?.camera ? `Camera ${photo.camera}` : 'Raspberry Pi camera';
+  displayAnalysis();
 }
 
 let historyKind = 'telemetry';
@@ -215,16 +218,6 @@ $('threshold').addEventListener('input', event => $('threshold-display').textCon
 $('save-threshold').addEventListener('click', () => save('settings/co2Threshold', Number($('threshold').value)));
 $('save-interval').addEventListener('click', () => save('settings/photoIntervalMinutes', Number($('photo-interval').value)));
 $('capture-button').addEventListener('click', () => save('commands/captureRequest', Date.now().toString()));
-$('toggle-key').addEventListener('click', () => $('api-key').type = $('api-key').type === 'password' ? 'text' : 'password');
-$('save-key').addEventListener('click', () => {
-  const key = $('api-key').value.trim();
-  if (!key.startsWith('sk-')) { toast('Enter a valid OpenAI API key'); return; }
-  sessionStorage.setItem('sifs-openai-key', key);
-  $('api-key').value = '';
-  $('key-status').textContent = 'Key saved for this browser tab';
-  toast('API key saved for this session');
-});
-if (sessionStorage.getItem('sifs-openai-key')) $('key-status').textContent = 'Key saved for this browser tab';
 
 function addResult(label, value, parent) {
   const item = document.createElement('div'); item.className = 'result-item';
@@ -240,45 +233,29 @@ function addTextSection(title, content, parent) {
     parent.append(list);
   } else { const p = document.createElement('p'); p.textContent = content || 'No observations.'; parent.append(p); }
 }
-$('analyze-button').addEventListener('click', async () => {
-  const key = sessionStorage.getItem('sifs-openai-key');
-  if (!key) { location.hash = 'settings'; toast('Add your OpenAI API key in Settings first'); return; }
-  if (!data.photo?.image) { toast('Capture a plant photo first'); return; }
-  const button = $('analyze-button'); button.disabled = true; button.textContent = 'Analyzing photo…';
-  try {
-    const response = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'gpt-4.1-mini', max_output_tokens: 700,
-        input: [{ role: 'user', content: [
-          { type: 'input_text', text: 'Assess this plant photo for a home grower. Return ONLY valid JSON with keys crop_type (string), growth_stage (string), health_status (string), visible_issues (array of short strings), recommendations (array of short strings), confidence (string: low/medium/high). Identify only what is visually supported. Do not claim a disease diagnosis from an image alone. If uncertain, say so.' },
-          { type: 'input_image', image_url: `data:image/jpeg;base64,${data.photo.image}`, detail: 'high' }
-        ] }] })
-    });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error?.message || `OpenAI request failed (${response.status})`);
-    const raw = (result.output || []).flatMap(item => item.content || []).filter(item => item.type === 'output_text').map(item => item.text).join('\n');
-    const parsed = JSON.parse(raw.replace(/^```(?:json)?\s*|\s*```$/g, ''));
-    const target = $('analysis-result'); target.replaceChildren();
-    const grid = document.createElement('div'); grid.className = 'result-grid';
-    addResult('Crop type', parsed.crop_type, grid);
-    addResult('Growth stage', parsed.growth_stage, grid);
-    addResult('Visible health', parsed.health_status, grid);
-    target.append(grid);
-    addTextSection('Visible concerns', parsed.visible_issues, target);
-    addTextSection('Suggested care', parsed.recommendations, target);
-    addTextSection('Confidence', parsed.confidence, target);
-    $('result-card').classList.remove('hidden');
-    const saved = { ...parsed, timestamp: Date.now(), photoCapturedAt: data.photo.capturedAt || null };
-    if (data.local) {
-      const response = await localFetch('/analysis', { method: 'POST', body: JSON.stringify({ result: saved }) });
-      if (!response.ok) throw new Error('Analysis succeeded, but local history could not be saved');
-    } else if (user) {
-      await firebaseFns.push(firebaseFns.ref(database, `farms/${farmId}/history/analyses`), saved);
-    }
-    toast('Plant analysis complete');
-  } catch (error) { toast(error.message || 'Analysis failed'); }
-  finally { button.disabled = false; button.textContent = '✦   Analyze photo'; }
-});
+function displayAnalysis() {
+  const hasPhoto = Boolean(data.photo?.image);
+  const result = hasPhoto && data.analysis?.photoCapturedAt === data.photo?.capturedAt ? data.analysis : null;
+  const messages = { waiting: 'Waiting for a photo', pending: 'Analysis queued on the Pi',
+    analyzing: 'Analyzing the latest photo', retrying: 'Analysis delayed; the Pi will retry',
+    needs_key: 'Analysis needs a key on the Pi', complete: 'Latest photo analyzed' };
+  const status = !hasPhoto ? 'Waiting for a photo' : result ? 'Latest photo analyzed' :
+    data.analysisStatus === 'complete' ? 'Waiting for the latest analysis' :
+    messages[data.analysisStatus] || 'Waiting for the latest analysis';
+  $('analysis-status').textContent = status;
+  $('settings-analysis-status').textContent = status;
+  $('result-card').classList.toggle('hidden', !result);
+  if (!result) return;
+  const target = $('analysis-result'); target.replaceChildren();
+  const grid = document.createElement('div'); grid.className = 'result-grid';
+  addResult('Crop type', result.crop_type, grid);
+  addResult('Growth stage', result.growth_stage, grid);
+  addResult('Visible health', result.health_status, grid);
+  target.append(grid);
+  addTextSection('Visible concerns', result.visible_issues, target);
+  addTextSection('Suggested care', result.recommendations, target);
+  addTextSection('Confidence', result.confidence, target);
+}
 
 $('login-form').addEventListener('submit', async event => {
   event.preventDefault();
@@ -337,6 +314,9 @@ async function pollLocal() {
   data.telemetry = snapshot.telemetry || {};
   data.settings = snapshot.settings || {};
   data.photo = snapshot.photo || null;
+  data.analysis = snapshot.analysis || null;
+  data.analysisStatus = snapshot.analysisStatus || 'waiting';
+  data.analysisError = snapshot.analysisError || null;
   $('login-modal').classList.add('hidden');
   $('account-detail').textContent = 'Direct local connection to Raspberry Pi';
   displayTelemetry(); displaySettings(); displayPhoto();
@@ -393,7 +373,14 @@ async function connectFirebase() {
     refs = [
       dbModule.onValue(dbModule.ref(database, `${base}/telemetry`), snap => { data.telemetry = snap.val() || {}; displayTelemetry(); }, () => setConnection('Access denied', 'offline')),
       dbModule.onValue(dbModule.ref(database, `${base}/settings`), snap => { data.settings = snap.val() || {}; displaySettings(); }),
-      dbModule.onValue(dbModule.ref(database, `${base}/photos/latest`), snap => { data.photo = snap.val(); displayPhoto(); })
+      dbModule.onValue(dbModule.ref(database, `${base}/photos/latest`), snap => { data.photo = snap.val(); displayPhoto(); }),
+      dbModule.onValue(dbModule.query(dbModule.ref(database, `${base}/history/analyses`), dbModule.limitToLast(1)),
+        snap => { data.analysis = Object.values(snap.val() || {})[0] || null; displayAnalysis(); }),
+      dbModule.onValue(dbModule.ref(database, `${base}/status`), snap => {
+        data.analysisStatus = snap.val()?.analysisStatus || 'waiting';
+        data.analysisError = snap.val()?.analysisError || null;
+        displayAnalysis();
+      })
     ];
     if (location.hash === '#history') loadHistory();
   });

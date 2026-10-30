@@ -16,11 +16,6 @@
             "$entry": {
               ".write": "auth != null && (auth.token.email_verified === true || auth.token.firebase.sign_in_provider === 'anonymous') && !data.exists()"
             }
-          },
-          "analyses": {
-            "$entry": {
-              ".write": "auth != null && (auth.token.email_verified === true || auth.token.firebase.sign_in_provider === 'anonymous') && !data.exists()"
-            }
           }
         }
       }

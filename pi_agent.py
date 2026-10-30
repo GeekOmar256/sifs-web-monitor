@@ -16,6 +16,7 @@ import cv2
 import firebase_admin
 from firebase_admin import credentials, db
 import serial
+from auto_analysis import run_auto_analysis
 from control_logic import light_should_run, parse_co2_packet, pump_should_run
 from local_server import LocalState, create_app
 
@@ -230,7 +231,9 @@ def cloud_sync(root, state, stop_event):
                 state.import_analyses(cloud_analyses)
                 last_analysis_sync = time.monotonic()
             root.child("status").update({"onlineAt": utc_now(),
-                                          "cameraError": snapshot["cameraError"]})
+                                          "cameraError": snapshot["cameraError"],
+                                          "analysisStatus": snapshot["analysisStatus"],
+                                          "analysisError": snapshot["analysisError"]})
             state.cloud_online = True
         except Exception as exc:
             state.cloud_online = False
@@ -250,6 +253,7 @@ def main():
     threading.Thread(target=lambda: local_app.run(host="0.0.0.0", port=5000,
                                                   threaded=True, use_reloader=False), daemon=True).start()
     stop_event = threading.Event()
+    threading.Thread(target=run_auto_analysis, args=(state, stop_event), daemon=True).start()
     if root:
         threading.Thread(target=cloud_sync, args=(root, state, stop_event), daemon=True).start()
     hardware = Hardware()

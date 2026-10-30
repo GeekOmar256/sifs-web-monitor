@@ -10,12 +10,12 @@ Mobile-first Firebase web dashboard and Raspberry Pi controller for an indoor fa
 - Camera still photo every 1–60 minutes, plus an on-demand capture button. No live stream is published.
 - History page with timestamped telemetry and a settings snapshot every minute, every settings change, saved plant photos, and saved AI analyses. The Pi keeps a local SQLite copy and forwards records to Firebase when online.
 - Direct LAN dashboard at `http://<pi-ip>:5000`, protected with a local PIN. It reads and controls the Pi without depending on Firebase connectivity.
-- User-triggered plant photo analysis for likely crop type, growth stage, and visible health concerns. The user's OpenAI API key is held only in browser `sessionStorage` and the image is sent to OpenAI only when Analyze is tapped. Do not enter a shared or unrestricted key on a shared device.
+- Automatic plant photo analysis for likely crop type, growth stage, and visible health concerns. The Pi uses a private `OPENAI_API_KEY` from its service environment after each new photo; the browser never receives the key.
 - Firebase Authentication, Realtime Database, and a separate Firebase Hosting site.
 
 ## Firebase deployment
 
-The SIFS site is `https://sifs-smart-farm.web.app` in project `crop-moniotring-ggvmx4`. The app has its own Web App registration and Hosting target `sifs`; it does not deploy to the project's default Hosting site. Firebase Spark allowed only one Realtime Database instance, so SIFS uses the new default database under `farms/sifs`. Anyone can create an email account or continue anonymously. Both verified email users and anonymous visitors can view the dashboard and change settings, request photos, and save analyses. The Pi uses the Admin SDK to write sensor data and photos.
+The SIFS site is `https://sifs-smart-farm.web.app` in project `crop-moniotring-ggvmx4`. The app has its own Web App registration and Hosting target `sifs`; it does not deploy to the project's default Hosting site. Firebase Spark allowed only one Realtime Database instance, so SIFS uses the new default database under `farms/sifs`. Anyone can create an email account or continue anonymously. Both verified email users and anonymous visitors can view the dashboard, change settings, and request photos. The Pi uses the Admin SDK to write sensor data, photos, and analyses.
 
 1. The project's **Email/Password** and **Anonymous** sign-in providers are enabled. At the SIFS site, select **Create account** with any email address and verify the link Firebase sends, or select **Continue anonymously**. Both paths can control the connected farm. Do not put passwords in this repository.
 2. From this folder, deploy with `firebase deploy --only auth,hosting:sifs,database --project crop-moniotring-ggvmx4`. Use this exact Hosting target to avoid deploying to another site.
@@ -49,6 +49,8 @@ export SIFS_CO2_PORT=/dev/serial0
 export SIFS_LOCAL_PIN='choose-a-long-private-pin'
 ./venv/bin/python pi_agent.py
 ```
+
+For automatic photo analysis, add `OPENAI_API_KEY` to `/etc/sifs/sifs.env` privately and restart `sifs.service`. The Pi sends each captured JPEG to the OpenAI Responses API in a background worker, saves the result in local history, and synchronizes it to Firebase. Without a key, the app reports that Pi analysis needs configuration; users do not enter a key in the web app. Image analysis is billed by OpenAI for each processed photo, so choose the snapshot interval accordingly.
 
 Open `http://<pi-ip>:5000` on a phone connected to the same local network and enter the PIN. The local dashboard uses the same interface and controls. `SIFS_LOCAL_PIN` must be at least six characters. Use a trusted LAN; local HTTP does not encrypt the PIN in transit. The Pi stores recent history in `data/history.sqlite3` and settings in `data/settings.json`. Keep the `data/` folder when updating the code.
 
