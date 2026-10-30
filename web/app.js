@@ -298,8 +298,8 @@ $('login-form').addEventListener('submit', async event => {
 });
 $('create-account').addEventListener('click', async () => {
   $('login-error').textContent = '';
-  if ($('login-email').value.trim().toLowerCase() !== 'smartfarm@gmail.com') {
-    $('login-error').textContent = 'Use the authorized Smartfarm@gmail.com address.'; return;
+  if (!['smartfarm@gmail.com', 'smartfarm2026@gmail.com'].includes($('login-email').value.trim().toLowerCase())) {
+    $('login-error').textContent = 'Use an authorized Smart Farm email address.'; return;
   }
   try {
     const result = await firebaseFns.createUserWithEmailAndPassword(auth, $('login-email').value, $('login-password').value);
